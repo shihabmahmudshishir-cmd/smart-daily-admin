@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="bn">
 <head>
@@ -5,40 +6,157 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Smart Daily BD Admin</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;font-family:Arial;background:#f1f5f9;color:#172554}
-header{background:#172554;color:white;padding:22px}
-header h2{margin:0}
-main{padding:18px;max-width:900px;margin:auto}
-h2{margin-top:20px}
-.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-.card{background:white;padding:20px;border-radius:12px;box-shadow:0 2px 8px #ddd}
-.card h3{font-size:15px;color:#64748b}
-.card p{font-size:25px;font-weight:bold;margin:8px 0}
-button{background:#172554;color:white;border:0;padding:13px;border-radius:8px;width:100%;margin-top:10px;font-size:15px}
+body{font-family:Arial;background:#f1f5f9;margin:0;color:#172554}
+header{background:#172554;color:white;padding:20px}
+main{max-width:600px;margin:20px auto;padding:15px}
+.card{background:white;padding:20px;margin:15px 0;border-radius:12px}
+input,button{width:100%;padding:13px;margin:8px 0;box-sizing:border-box;border-radius:7px}
+input{border:1px solid #ccc}
+button{background:#172554;color:white;border:0;font-size:16px}
+.hidden{display:none}
+label{display:block;margin:12px 0}
 </style>
 </head>
 <body>
-<header>
-<h2>SMART DAILY BD</h2>
-<p>OWNER ADMIN PANEL</p>
-</header>
+<header><h2>SMART DAILY BD</h2>OWNER ADMIN PANEL</header>
 <main>
-<h2>Dashboard</h2>
-<div class="cards">
-<div class="card"><h3>Total Users</h3><p>—</p></div>
-<div class="card"><h3>Premium Users</h3><p>—</p></div>
-<div class="card"><h3>Total Income</h3><p>৳0</p></div>
-<div class="card"><h3>App Status</h3><p>Active</p></div>
+<div class="card" id="login">
+<h3>Admin Login</h3>
+<input id="email" type="email" placeholder="Admin Email">
+<input id="password" type="password" placeholder="Password">
+<button id="loginBtn">Login</button>
+<p id="msg"></p>
 </div>
-<h2>App Management</h2>
+
+<div id="dashboard" class="hidden">
 <div class="card">
-<button onclick="alert('Firebase connection will be added next')">Feature Management</button>
-<button onclick="alert('Firebase connection will be added next')">User Management</button>
-<button onclick="alert('Firebase connection will be added next')">Premium Management</button>
-<button onclick="alert('Firebase connection will be added next')">Advertisement Settings</button>
-<button onclick="alert('Firebase connection will be added next')">App Notice</button>
+<h3>Dashboard</h3>
+<p>Welcome, Admin!</p>
+<button id="logoutBtn">Logout</button>
+</div>
+
+<div class="card">
+<h3>App Settings</h3>
+<label>Maintenance Mode
+<input type="checkbox" id="maintenance">
+</label>
+<label>Premium Enabled
+<input type="checkbox" id="premium">
+</label>
+<button id="saveSettings">Save Settings</button>
+</div>
+
+<div class="card">
+<h3>Feature Management</h3>
+<div id="features"></div>
+<button id="saveFeatures">Save Features</button>
+</div>
+
+<div class="card">
+<h3>App Notice</h3>
+<input id="notice" placeholder="App Notice">
+<button id="saveNotice">Save Notice</button>
+</div>
+<p id="status"></p>
 </div>
 </main>
+
+<script type="module">
+import {initializeApp} from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import {getAuth,signInWithEmailAndPassword,onAuthStateChanged,signOut}
+from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+import {getFirestore,doc,getDoc,setDoc}
+from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+
+const firebaseConfig = {
+apiKey: "AIzaSyBbDEJzTBFPo5ZoQR2vmWW6BUelAzxP4-Y",
+authDomain: "smart-daily-bd.firebaseapp.com",
+projectId: "smart-daily-bd",
+storageBucket: "smart-daily-bd.firebasestorage.app",
+messagingSenderId: "154033948185",
+appId: "1:154033948185:web:5ae5a846bbcd1674d8cc88",
+measurementId: "G-D22JK6W9SS"
+};
+
+const app=initializeApp(firebaseConfig);
+const auth=getAuth(app);
+const db=getFirestore(app);
+const $=id=>document.getElementById(id);
+
+const featureNames=["calculator","ageCalculator","qrScanner","pdfMaker","dailyExpense","notes"];
+
+$("loginBtn").onclick=async()=>{
+$("msg").textContent="Logging in...";
+try{
+await signInWithEmailAndPassword(auth,$("email").value,$("password").value);
+}catch(e){$("msg").textContent=e.message;}
+};
+
+onAuthStateChanged(auth,async user=>{
+if(!user){$("login").classList.remove("hidden");$("dashboard").classList.add("hidden");return;}
+try{
+const admin=await getDoc(doc(db,"admins",user.uid));
+if(!admin.exists() || admin.data().role!=="admin"){
+await signOut(auth);
+$("msg").textContent="Admin access denied";
+return;
+}
+$("login").classList.add("hidden");
+$("dashboard").classList.remove("hidden");
+await loadData();
+}catch(e){$("status").textContent=e.message;}
+});
+
+$("logoutBtn").onclick=()=>signOut(auth);
+
+async function loadData(){
+const settings=await getDoc(doc(db,"app_settings","general"));
+if(settings.exists()){
+$("maintenance").checked=settings.data().maintenanceMode||false;
+$("premium").checked=settings.data().premiumEnabled||false;
+}
+const features=await getDoc(doc(db,"features","general"));
+const data=features.exists()?features.data():{};
+$("features").innerHTML="";
+featureNames.forEach(name=>{
+const label=document.createElement("label");
+const check=document.createElement("input");
+check.type="checkbox";check.id="f_"+name;
+check.checked=!!data[name];
+label.append(check,document.createTextNode(" "+name));
+$("features").append(label);
+});
+const notice=await getDoc(doc(db,"admin_settings","general"));
+if(notice.exists())$("notice").value=notice.data().appNotice||"";
+}
+
+$("saveSettings").onclick=async()=>{
+try{
+await setDoc(doc(db,"app_settings","general"),{
+maintenanceMode:$("maintenance").checked,
+premiumEnabled:$("premium").checked
+},{merge:true});
+$("status").textContent="Settings saved!";
+}catch(e){$("status").textContent=e.message;}
+};
+
+$("saveFeatures").onclick=async()=>{
+try{
+const data={};
+featureNames.forEach(name=>data[name]=$("f_"+name).checked);
+await setDoc(doc(db,"features","general"),data,{merge:true});
+$("status").textContent="Features saved!";
+}catch(e){$("status").textContent=e.message;}
+};
+
+$("saveNotice").onclick=async()=>{
+try{
+await setDoc(doc(db,"admin_settings","general"),{
+appNotice:$("notice").value
+},{merge:true});
+$("status").textContent="Notice saved!";
+}catch(e){$("status").textContent=e.message;}
+};
+</script>
 </body>
 </html>
